@@ -1,0 +1,1 @@
+ALTER TABLE "wall_layouts" ADD COLUMN "panel_config" jsonb DEFAULT '{}'::jsonb NOT NULL;

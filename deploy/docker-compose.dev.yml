@@ -1,0 +1,48 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Argus — Monitoring Platform · Author: Brijesh Dave <https://github.com/brijeshdave>
+#
+# Dev overlay: run the app services from the STANDARD official node image with the
+# source bind-mounted and hot reload — no custom image build in development.
+# Postgres/Redis come from the base compose (already standard images).
+#
+# Usage:
+#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml --project-directory . up
+# (or simply `./argus dev` to run locally without Docker).
+# ─────────────────────────────────────────────────────────────────────────────
+name: argus
+
+services:
+  backend:
+    image: node:22-bookworm-slim
+    build: null # override the base build — use the standard image as-is
+    working_dir: /repo
+    command: ["sh", "-c", "corepack enable && pnpm install && pnpm --filter @argus/backend dev"]
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ./:/repo
+      - /repo/node_modules
+
+  workers:
+    image: node:22-bookworm-slim
+    build: null
+    working_dir: /repo
+    command: ["sh", "-c", "corepack enable && pnpm install && pnpm --filter @argus/workers dev"]
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ./:/repo
+      - /repo/node_modules
+
+  frontend:
+    image: node:22-bookworm-slim
+    build: null
+    working_dir: /repo
+    command: ["sh", "-c", "corepack enable && pnpm install && pnpm --filter @argus/frontend dev -- --host"]
+    environment:
+      NODE_ENV: development
+    ports:
+      - "${FRONTEND_PORT:-8081}:8081"
+    volumes:
+      - ./:/repo
+      - /repo/node_modules

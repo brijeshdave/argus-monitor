@@ -1,0 +1,41 @@
+{
+  "name": "@argus/backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Argus backend — Fastify API, WebSocket hub (operator + agent control plane), ingest and domain orchestration.",
+  "author": "Brijesh Dave <https://github.com/brijeshdave>",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "main": "./dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json && tsc-alias -p tsconfig.json && node -e \"require('fs').cpSync('src/content/developer','dist/content/developer',{recursive:true})\"",
+    "start": "node dist/server.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@argus/core": "workspace:*",
+    "@argus/db": "workspace:*",
+    "@argus/shared": "workspace:*",
+    "@fastify/cors": "^10.0.1",
+    "@fastify/helmet": "^13.0.1",
+    "@fastify/jwt": "^10.1.0",
+    "@fastify/rate-limit": "^10.2.1",
+    "@fastify/websocket": "^11.0.1",
+    "bullmq": "^5.34.5",
+    "drizzle-orm": "^0.45.2",
+    "fastify": "^5.2.0",
+    "fastify-plugin": "^5.0.1",
+    "ioredis": "^5.4.2",
+    "net-snmp": "^3.26.3",
+    "pino": "^9.5.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "tsc-alias": "^1.8.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

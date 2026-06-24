@@ -1,0 +1,20 @@
+# Argus — Monitoring Platform
+# Author: Brijesh Dave <https://github.com/brijeshdave>
+#
+# TLS terminator for Argus. Issues/renews a Let's Encrypt cert via the Cloudflare
+# DNS-01 challenge, then reverse-proxies everything to the frontend container
+# (which already forwards /api and /ws to the backend, and serves the SPA).
+# Values are injected from the environment (set in .env):
+#   ARGUS_DOMAIN, ACME_EMAIL, CF_API_TOKEN
+{
+	email {$ACME_EMAIL}
+}
+
+{$ARGUS_DOMAIN} {
+	encode zstd gzip
+	# WebSocket upgrades (/ws) are handled transparently by reverse_proxy.
+	reverse_proxy frontend:80
+	tls {
+		dns cloudflare {$CF_API_TOKEN}
+	}
+}

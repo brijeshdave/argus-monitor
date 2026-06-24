@@ -1,0 +1,1 @@
+ALTER TABLE "wall_layouts" ADD COLUMN "rotate_sec" integer DEFAULT 10 NOT NULL;

@@ -1,0 +1,1 @@
+ALTER TABLE "unit_states" ADD COLUMN "sample" jsonb;

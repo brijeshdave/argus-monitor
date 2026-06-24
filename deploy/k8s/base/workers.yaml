@@ -1,0 +1,27 @@
+# Argus — Monitoring Platform · Author: Brijesh Dave <https://github.com/brijeshdave>
+# Workers run on a separate Deployment so they scale independently of the API.
+# They require Redis (REDIS_ENABLED=true) to consume queues across hosts.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argus-workers
+  namespace: argus
+  labels: { app.kubernetes.io/name: argus-workers, app.kubernetes.io/part-of: argus }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: argus-workers }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: argus-workers }
+    spec:
+      securityContext: { runAsNonRoot: true, runAsUser: 10002 }
+      containers:
+        - name: workers
+          image: ghcr.io/brijeshdave/argus-workers:latest
+          envFrom:
+            - configMapRef: { name: argus-config }
+            - secretRef: { name: argus-secrets }
+          resources:
+            requests: { cpu: "50m", memory: "128Mi" }
+            limits: { cpu: "1", memory: "512Mi" }

@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────────────────────
+# Argus — Monitoring Platform · Author: Brijesh Dave <https://github.com/brijeshdave>
+#
+# Single entry point to manage the whole stack (local dev + Docker Compose).
+# Usage: ./argus <command> [args]   ·   run `./argus help` for the full list.
+# ─────────────────────────────────────────────────────────────────────────────
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT_DIR"
+
+COMPOSE_FILE="deploy/docker-compose.yml"
+COMPOSE_DEV_FILE="deploy/docker-compose.dev.yml"
+
+# Prefer `docker compose` (v2); fall back to legacy `docker-compose`.
+# --project-directory pins relative paths (bind mounts, env_file) to the repo root,
+# while each service's build context stays relative to deploy/docker-compose.yml.
+if docker compose version >/dev/null 2>&1; then
+  DC="docker compose -f $COMPOSE_FILE --project-directory $ROOT_DIR"
+else
+  DC="docker-compose -f $COMPOSE_FILE --project-directory $ROOT_DIR"
+fi
+
+log()  { printf '\033[0;36m[argus]\033[0m %s\n' "$*"; }
+err()  { printf '\033[0;31m[argus:error]\033[0m %s\n' "$*" >&2; }
+
+ensure_env() {
+  if [[ ! -f .env ]]; then
+    log "No .env found — creating from .env.example (review before production)."
+    cp .env.example .env
+  fi
+}
+
+cmd_help() {
+  cat <<'EOF'
+Argus management CLI
+
+  Stack (Docker Compose, bind-mounted data):
+    up                Build (if needed) and start the full stack in the background
+    down              Stop and remove containers (DATA in ./data is preserved)
+    restart [svc]     Restart the whole stack or one service
+    ps                Show service status
+    logs [svc]        Tail logs (all services, or one)
+    build [svc]       Build images
+    pull              Pull base images
+
+  Database:
+    migrate           Run Drizzle migrations (master + telemetry)
+    seed              Seed roles/groups/permissions + immutable superadmin
+    backup [name]     Dump both databases to ./data/backups
+    restore <file>    Restore from a backup dump
+    dev-db <cmd>      Dev databases: init | wipe | copy [--since ISO --until ISO]
+
+  Agent:
+    agent-build [os]  Cross-compile the agent (windows|linux|darwin|all)
+    agent-image       Build the NAS agent Docker image → agent/docker-images/*.tar
+
+  Local dev (no Docker):
+    dev               Run backend + frontend + workers with hot reload
+    install           Install workspace dependencies (pnpm)
+
+  Utilities:
+    gen-key           Print a fresh 32-byte base64 ENCRYPTION_KEY
+    reset-password    Reset the owner/superadmin password (offline)
+    doctor            Check toolchain + config prerequisites
+    help              Show this help
+EOF
+}
+
+cmd_up()        { ensure_env; log "Starting stack…"; $DC up -d --build; $DC ps; }
+cmd_down()      { log "Stopping stack (data preserved)…"; $DC down; }
+cmd_restart()   { $DC restart "${1:-}"; }
+cmd_ps()        { $DC ps; }
+cmd_logs()      { $DC logs -f --tail=200 "${1:-}"; }
+cmd_build()     { $DC build "${1:-}"; }
+cmd_pull()      { $DC pull; }
+
+# Run via node directly (not pnpm/corepack) so it works as the non-root image user.
+cmd_migrate()   { ensure_env; $DC run --rm -w /repo/packages/db backend node dist/migrate.js; }
+cmd_seed()      { ensure_env; $DC run --rm -w /repo/packages/db backend node dist/seed.js; }
+cmd_backup()    { ensure_env; $DC run --rm workers node dist/jobs/backup.js "${1:-manual}"; }
+cmd_restore()   { ensure_env; [[ -n "${1:-}" ]] || { err "usage: argus restore <file>"; exit 1; }; \
+                  $DC run --rm workers node dist/jobs/restore.js "$1"; }
+
+cmd_agent_build() { bash agent/scripts/build.sh "${1:-all}"; }
+
+# Build the NAS agent container image (linux/amd64) and export a Container-Station-
+# importable tarball into agent/docker-images/. Uses skopeo for the classic docker
+# archive format (Docker's containerd store emits OCI, which Container Station rejects);
+# falls back to `docker save` with a warning if skopeo is missing.
+cmd_agent_image() {
+  local ver out
+  ver="$(cat agent/VERSION 2>/dev/null || echo 1.0.0)"
+  out="agent/docker-images/argus-agent-qnap-latest.tar"
+  command -v docker >/dev/null 2>&1 || { err "docker not found"; exit 1; }
+  log "Building argus-agent:$ver (linux/amd64)…"
+  docker build --platform linux/amd64 --provenance=false \
+    -t "argus-agent:$ver" -t argus-agent:latest \
+    --build-arg "VERSION=$ver" --build-arg "BUILT=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    -f agent/docker-images/Dockerfile agent || { err "docker build failed"; exit 1; }
+  rm -f "$out"
+  if command -v skopeo >/dev/null 2>&1; then
+    log "Exporting Container-Station-compatible archive → $out"
+    skopeo copy "docker-daemon:argus-agent:$ver" "docker-archive:$out:argus-agent:latest"
+  else
+    err "skopeo not found — using 'docker save' (Container Station may reject OCI; 'sudo apt install skopeo' for a compatible archive)"
+    docker save -o "$out" argus-agent:latest
+  fi
+  log "Done → $out  (on the NAS: docker load -i argus-agent-qnap-latest.tar && docker compose up -d --force-recreate)"
+}
+
+cmd_dev()       { ensure_env; pnpm install; pnpm dev; }
+cmd_install()   { pnpm install; }
+
+# Development databases (argus_master_dev / argus_telemetry_dev in the same Postgres).
+#   dev-db init                      create + migrate the dev databases
+#   dev-db wipe                      truncate ALL data in the dev databases
+#   dev-db copy [--since X --until Y] clone prod → dev (master full + telemetry in range)
+# Dev URLs are derived from the prod *_DATABASE_URL by appending "_dev" to the db name.
+cmd_dev_db() {
+  ensure_env
+  local sub="${1:-}"; shift || true
+  local pguser devm devt
+  pguser="$(grep -E '^POSTGRES_USER=' .env | head -1 | cut -d= -f2-)"; pguser="${pguser:-argus}"
+  local pgdb; pgdb="$(grep -E '^POSTGRES_DB=' .env | head -1 | cut -d= -f2-)"; pgdb="${pgdb:-argus_master}"
+  devm="$(grep -E '^MASTER_DATABASE_URL=' .env | head -1 | cut -d= -f2-)_dev"
+  devt="$(grep -E '^TELEMETRY_DATABASE_URL=' .env | head -1 | cut -d= -f2-)_dev"
+  case "$sub" in
+    init)
+      log "Creating dev databases (idempotent)…"
+      $DC exec -T postgres psql -U "$pguser" -d "$pgdb" -tc "SELECT 1 FROM pg_database WHERE datname='argus_master_dev'"   | grep -q 1 || $DC exec -T postgres psql -U "$pguser" -d "$pgdb" -c "CREATE DATABASE argus_master_dev"
+      $DC exec -T postgres psql -U "$pguser" -d "$pgdb" -tc "SELECT 1 FROM pg_database WHERE datname='argus_telemetry_dev'" | grep -q 1 || $DC exec -T postgres psql -U "$pguser" -d "$pgdb" -c "CREATE DATABASE argus_telemetry_dev"
+      log "Migrating dev databases…"
+      $DC run --rm -e "MASTER_DATABASE_URL=$devm" -e "TELEMETRY_DATABASE_URL=$devt" -w /repo/packages/db backend node dist/migrate.js
+      log "Dev databases ready. Point a dev backend at: $devm / $devt"
+      ;;
+    wipe)
+      log "Wiping dev data…"
+      $DC run --rm -e "DEV_MASTER_DATABASE_URL=$devm" -e "DEV_TELEMETRY_DATABASE_URL=$devt" -w /repo/packages/db backend node dist/devdb.js wipe
+      ;;
+    copy)
+      log "Cloning production → dev…"
+      $DC run --rm -e "DEV_MASTER_DATABASE_URL=$devm" -e "DEV_TELEMETRY_DATABASE_URL=$devt" -w /repo/packages/db backend node dist/devdb.js copy "$@"
+      ;;
+    *) err "usage: argus dev-db <init|wipe|copy> [--since ISO --until ISO]"; exit 1;;
+  esac
+}
+
+cmd_gen_key()   { node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"; }
+cmd_reset_password() { $DC run --rm backend node dist/scripts/reset-password.js "$@"; }
+
+cmd_doctor() {
+  log "Toolchain:"
+  node -v 2>/dev/null  && echo "  node ok"  || err "node missing"
+  pnpm -v 2>/dev/null  && echo "  pnpm ok"  || err "pnpm missing"
+  go version 2>/dev/null && echo "  go ok"   || err "go missing (agent builds)"
+  docker -v 2>/dev/null && echo "  docker ok" || err "docker missing"
+  [[ -f .env ]] && echo "  .env present" || err ".env missing (run any command to auto-create)"
+}
+
+main() {
+  local cmd="${1:-help}"; shift || true
+  case "$cmd" in
+    up) cmd_up "$@";;            down) cmd_down "$@";;
+    restart) cmd_restart "$@";;  ps) cmd_ps "$@";;
+    logs) cmd_logs "$@";;        build) cmd_build "$@";;
+    pull) cmd_pull "$@";;
+    migrate) cmd_migrate "$@";;  seed) cmd_seed "$@";;
+    backup) cmd_backup "$@";;    restore) cmd_restore "$@";;
+    agent-build) cmd_agent_build "$@";;
+    agent-image) cmd_agent_image "$@";;
+    dev) cmd_dev "$@";;          install) cmd_install "$@";;
+    dev-db) cmd_dev_db "$@";;
+    gen-key) cmd_gen_key "$@";;  reset-password) cmd_reset_password "$@";;
+    doctor) cmd_doctor "$@";;    help|-h|--help) cmd_help;;
+    *) err "unknown command: $cmd"; cmd_help; exit 1;;
+  esac
+}
+
+main "$@"

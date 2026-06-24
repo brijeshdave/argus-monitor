@@ -1,0 +1,1 @@
+ALTER TABLE "agents" ADD COLUMN "push_interval_sec" integer;

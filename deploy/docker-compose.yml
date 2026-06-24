@@ -1,0 +1,133 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Argus — Monitoring Platform · Author: Brijesh Dave <https://github.com/brijeshdave>
+#
+# Production-shaped Compose stack. ALL persistent data uses BIND MOUNTS under
+# ./data (not named volumes) so backups, inspection and host-level snapshots are
+# trivial. Redis + workers are optional — comment them out for single-node mode
+# (set REDIS_ENABLED=false in .env) and the backend runs jobs in-process.
+#
+# Build context is the repository root; each service has its own Dockerfile.
+# Run from the repo root via:  ./argus up
+# ─────────────────────────────────────────────────────────────────────────────
+name: argus
+
+services:
+  # Makes the bind-mounted data dir writable by the non-root app user (uid 10001).
+  # Bind-mount ownership comes from the host, so the image's USER can't be relied on;
+  # this runs once as root on each `up` (idempotent) before backend/workers start —
+  # without it the backend can't write agent builds, spool, reports or backups.
+  data-init:
+    image: busybox:1.37
+    command: ["sh", "-c", "mkdir -p /data/app && chown -R 10001 /data/app"]
+    volumes:
+      - ./data/app:/data/app
+    restart: "no"
+
+  postgres:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-argus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-argus}
+      # Both logical DBs live in one server; created on first boot by init script.
+      POSTGRES_DB: ${POSTGRES_DB:-argus_master}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./deploy/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-argus}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - ./data/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      BACKEND_HOST: 0.0.0.0
+      BACKEND_PORT: 8080
+    depends_on:
+      data-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    volumes:
+      # Spool, generated agent builds, reports, backups — real data on the host.
+      - ./data/app:/repo/data
+
+  workers:
+    build:
+      context: .
+      dockerfile: apps/workers/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      data-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+    volumes:
+      - ./data/app:/repo/data
+
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+      args:
+        # White-label branding, baked at build time (blank → "Argus"/"Monitoring").
+        VITE_BRAND_NAME: "${VITE_BRAND_NAME:-}"
+        VITE_BRAND_TAGLINE: "${VITE_BRAND_TAGLINE:-}"
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-8081}:80"
+
+  # ── DISABLED ────────────────────────────────────────────────────────────────
+  # The built-in TLS terminator is retired in favour of the standalone host-wide
+  # proxy at ../kos-obervability-caddy (one wildcard cert for *.rayzonsolar.net via
+  # Cloudflare DNS-01; routes argus.rayzonsolar.net → this frontend on host :8081).
+  # Kept here (commented) for reference — see deploy/caddy/. Do NOT re-enable
+  # without first freeing host :80/:443.
+  #
+  # OPT-IN TLS terminator (HTTPS via Let's Encrypt, Cloudflare DNS-01 challenge).
+  # Only starts under the `tls` profile — enable with COMPOSE_PROFILES=tls in .env
+  # plus ARGUS_DOMAIN / ACME_EMAIL / CF_API_TOKEN (and set TRUST_PROXY=true). It
+  # proxies to the frontend, which already forwards /api + /ws to the backend.
+  # caddy:
+  #   profiles: ["tls"]
+  #   build:
+  #     context: .
+  #     dockerfile: deploy/caddy/Dockerfile
+  #   restart: unless-stopped
+  #   depends_on:
+  #     - frontend
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   environment:
+  #     ARGUS_DOMAIN: ${ARGUS_DOMAIN}
+  #     ACME_EMAIL: ${ACME_EMAIL}
+  #     CF_API_TOKEN: ${CF_API_TOKEN}
+  #   volumes:
+  #     - ./data/caddy:/data            # issued certs — persist to avoid re-issuing
+  #     - ./data/caddy-config:/config

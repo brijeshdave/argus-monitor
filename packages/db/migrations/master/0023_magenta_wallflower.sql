@@ -1,0 +1,1 @@
+ALTER TABLE "oidc_providers" ADD COLUMN "brand" text DEFAULT 'generic' NOT NULL;

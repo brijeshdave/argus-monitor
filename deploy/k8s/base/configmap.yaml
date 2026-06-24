@@ -1,0 +1,19 @@
+# Argus — Monitoring Platform · Author: Brijesh Dave <https://github.com/brijeshdave>
+# Non-secret runtime configuration. Secrets live in the Secret (see secret.example.yaml).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argus-config
+  namespace: argus
+data:
+  NODE_ENV: "production"
+  LOG_LEVEL: "info"
+  BACKEND_HOST: "0.0.0.0"
+  BACKEND_PORT: "8080"
+  DB_DRIVER: "pg"
+  REDIS_ENABLED: "true"
+  WORKER_MODE: "worker"
+  # Set when Argus sits behind an ingress/proxy you trust (X-Forwarded-For).
+  TRUST_PROXY: "true"
+  OIDC_ENABLED: "false"
+  OTEL_ENABLED: "false"

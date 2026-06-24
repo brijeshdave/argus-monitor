@@ -1,0 +1,1 @@
+ALTER TABLE "wall_devices" ADD COLUMN "fingerprint" text;

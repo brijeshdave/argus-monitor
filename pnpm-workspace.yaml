@@ -1,0 +1,6 @@
+# Argus — Monitoring Platform · Author: Brijesh Dave <https://github.com/brijeshdave>
+# pnpm workspace: apps (deployable services) + packages (shared libraries).
+# The Go agent lives under agent/ and is built with the Go toolchain, not pnpm.
+packages:
+  - "apps/*"
+  - "packages/*"

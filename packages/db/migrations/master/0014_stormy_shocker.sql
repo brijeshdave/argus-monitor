@@ -1,0 +1,1 @@
+ALTER TABLE "snmp_profiles" ADD COLUMN "tables" jsonb DEFAULT '[]'::jsonb NOT NULL;

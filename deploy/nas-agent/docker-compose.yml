@@ -1,0 +1,28 @@
+# Argus — NAS agent (QNAP QuTS hero Container Station, or any Docker host on the NAS)
+# Author: Brijesh Dave <https://github.com/brijeshdave>
+#
+# Runs the Argus agent inside the NAS so it walks shares on the LOCAL filesystem
+# (fast, full recursive folder stats at any depth) instead of probing over SMB.
+#
+#   1. In the Argus UI: Agents → mint a connection key.
+#   2. Set ARGUS_KEY / ARGUS_SERVER below (or via an .env file).
+#   3. Bind-mount each share you want folder stats for under /data (read-only).
+#   4. `docker compose up -d` (or import this stack in Container Station).
+#   5. Approve the agent in the UI, then add a Storage monitor with path
+#      /data/<share> and watched folders relative to it (depth as deep as you like).
+services:
+  argus-agent:
+    image: argus-agent:latest
+    pull_policy: never               # use the locally-loaded image, never pull from a registry
+    container_name: argus-agent
+    restart: unless-stopped
+    environment:
+      ARGUS_SERVER: ${ARGUS_SERVER:?set the backend URL, e.g. https://argus.example.com}
+      ARGUS_KEY: ${ARGUS_KEY:?set the UI connection key}
+    volumes:
+      # Read-only mount of the NAS data — adjust the host path to your pool/share.
+      # QuTS hero shares typically live under /share/<POOL>/<share> or /share/<share>.
+      - /share/CACHEDEV1_DATA:/data:ro
+      - argus-agent-spool:/var/lib/argus
+volumes:
+  argus-agent-spool:

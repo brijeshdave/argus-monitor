@@ -1,0 +1,33 @@
+{
+  "name": "argus",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Argus — versatile, agent-based monitoring platform. Author: Brijesh Dave (https://github.com/brijeshdave)",
+  "author": "Brijesh Dave <https://github.com/brijeshdave>",
+  "license": "AGPL-3.0-only",
+  "homepage": "https://github.com/brijeshdave/argus-monitor",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/brijeshdave/argus-monitor.git"
+  },
+  "engines": {
+    "node": ">=22 <25",
+    "pnpm": ">=9"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "db:generate": "pnpm --filter @argus/db generate",
+    "db:migrate": "pnpm --filter @argus/db migrate",
+    "db:seed": "pnpm --filter @argus/db seed"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

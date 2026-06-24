@@ -1,0 +1,13 @@
+# Argus — Monitoring Platform · Author: Brijesh Dave <https://github.com/brijeshdave>
+# Base manifests. Postgres + Redis are expected to be operator-managed or external
+# in production; provide them via the Secret URLs. secret.example.yaml is NOT
+# included here — create the real Secret out-of-band (sealed-secrets/external-secrets).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - backend.yaml
+  - workers.yaml
+  - frontend.yaml
+  - ingress.yaml

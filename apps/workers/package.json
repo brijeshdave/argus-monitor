@@ -1,0 +1,31 @@
+{
+  "name": "@argus/workers",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Argus background workers — agent builds, report rendering, DB backup/restore, retention pruning, storage scans. Runs in-process (no Redis) or as a separate process/host (with Redis + BullMQ).",
+  "author": "Brijesh Dave <https://github.com/brijeshdave>",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json && tsc-alias -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@argus/core": "workspace:*",
+    "@argus/db": "workspace:*",
+    "@argus/shared": "workspace:*",
+    "bullmq": "^5.34.5",
+    "ioredis": "^5.4.2",
+    "pino": "^9.5.0"
+  },
+  "devDependencies": {
+    "tsc-alias": "^1.8.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

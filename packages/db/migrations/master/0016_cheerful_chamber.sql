@@ -1,0 +1,1 @@
+ALTER TABLE "wall_layouts" ADD COLUMN "template" text DEFAULT 'flex' NOT NULL;

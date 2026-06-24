@@ -1,0 +1,43 @@
+# =============================================================================
+# Argus — Monitoring Platform · Author: Brijesh Dave <https://github.com/brijeshdave>
+# .dockerignore — excludes files from the Docker build context.
+# Keep in sync with .gitignore for things that must never enter images.
+# =============================================================================
+
+
+archive/
+
+# Dependencies — reinstalled inside the build stage
+node_modules/
+.pnpm-store/
+
+# Build output — rebuilt inside the build stage
+dist/
+build/
+*.tsbuildinfo
+apps/frontend/dist/
+
+# Runtime data — lives on bind-mounted host dirs, never baked into images
+*.sqlite
+*.sqlite-journal
+*.db
+data/
+
+# Secrets — injected at runtime via env_file / -e, never baked in
+.env
+.env.*
+!.env.example
+
+# Go agent — built with the Go toolchain, not in Node images
+agent/dist/
+agent/*.exe
+
+# Git / OS / editor noise
+.git/
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+
+.private/

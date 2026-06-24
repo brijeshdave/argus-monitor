@@ -1,0 +1,116 @@
+/* Argus — Monitoring Platform · Author: Brijesh Dave <https://github.com/brijeshdave>
+ * Theme: the "Refined SCADA dark" design. Tokens here are the source
+ * of truth for the palette; tailwind.config.js maps slate/accent utilities onto them
+ * so existing components reskin automatically. Inter (UI) + JetBrains Mono
+ * (data) are self-hosted via @fontsource (see main.tsx). */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Backgrounds */
+  --color-bg-base: #0a0d12;
+  --color-bg-panel: #12161c;
+  --color-bg-panel-raised: #181d25;
+  --color-bg-header: #0c0f14;
+  --color-bg-input: #1b212a;
+  /* Borders */
+  --color-border: #232c38;
+  --color-border-bright: #38465a;
+  /* Text */
+  --color-text-primary: #eef3f9;
+  --color-text-secondary: #b8c5d6;
+  --color-text-muted: #8a9cb0;
+  --color-text-dim: #6a7c91;
+  /* Accent */
+  --color-accent: #3b82f6;
+  --color-accent-2: #60a5fa;
+  /* Status semantic colors (+ glow) */
+  --color-up: #22c55e;
+  --color-up-glow: rgba(34, 197, 94, 0.4);
+  --color-degraded: #f97316;
+  --color-degraded-glow: rgba(249, 115, 22, 0.4);
+  --color-hang: #f59e0b;
+  --color-hang-glow: rgba(245, 158, 11, 0.45);
+  --color-down: #ef4444;
+  --color-down-glow: rgba(239, 68, 68, 0.45);
+  --color-unknown: #6b7280;
+  /* Fonts + shape */
+  --font-ui: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-data: "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
+  --radius: 12px;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.22);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  html {
+    font-size: 16px; /* bigger, more readable base */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  /* Scale the whole UI up on TV / 4K wall monitors. */
+  @media (min-width: 2200px) {
+    html { font-size: 18px; }
+  }
+  @media (min-width: 3200px) {
+    html { font-size: 21px; }
+  }
+
+  body {
+    @apply antialiased;
+    background-color: var(--color-bg-base);
+    color: var(--color-text-primary);
+    font-family: var(--font-ui);
+    letter-spacing: 0.005em;
+  }
+}
+
+/* ── Status LED (pulsing fault indicators) ─────────────────────────────────── */
+@keyframes led-pulse-down {
+  0%, 100% { opacity: 1; box-shadow: 0 0 8px 2px var(--color-down-glow); }
+  50% { opacity: 0.45; box-shadow: 0 0 2px 1px var(--color-down-glow); }
+}
+@keyframes led-pulse-hang {
+  0%, 100% { opacity: 1; box-shadow: 0 0 8px 2px var(--color-hang-glow); }
+  50% { opacity: 0.45; box-shadow: 0 0 2px 1px var(--color-hang-glow); }
+}
+
+.status-led {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+.status-led--up { background: var(--color-up); box-shadow: 0 0 6px 1px var(--color-up-glow); }
+.status-led--degraded { background: var(--color-degraded); animation: led-pulse-hang 1.2s ease-in-out infinite; }
+.status-led--hang { background: var(--color-hang); animation: led-pulse-hang 1.2s ease-in-out infinite; }
+.status-led--down { background: var(--color-down); animation: led-pulse-down 0.8s ease-in-out infinite; }
+.status-led--unknown { background: var(--color-unknown); }
+
+.font-data { font-family: var(--font-data); }
+
+/* ── Dark scrollbars ───────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--color-bg-base); }
+::-webkit-scrollbar-thumb { background: var(--color-border-bright); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
+
+/* ── Print / Save-as-PDF: clean ink-on-paper reports ───────────────────────── */
+@media print {
+  header,
+  .reports-sidebar,
+  .report-controls { display: none !important; }
+  :root, body, main { background: #fff !important; }
+  body, * { color: #111 !important; }
+  main { padding: 0 !important; }
+  table th, table td { border: 1px solid #ccc !important; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  @page { margin: 12mm; }
+}

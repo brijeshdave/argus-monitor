@@ -1,0 +1,7 @@
+# Argus — Monitoring Platform · Author: Brijesh Dave <https://github.com/brijeshdave>
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argus
+  labels:
+    app.kubernetes.io/part-of: argus

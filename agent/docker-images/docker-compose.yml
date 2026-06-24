@@ -1,0 +1,14 @@
+services:
+  argus-agent:
+    image: argus-agent:latest
+    container_name: argus-agent
+    hostname: argus-agent
+    restart: unless-stopped
+    environment:
+      ARGUS_SERVER: "http://10.2.0.121:8080"   # same URL/scheme you use for the UI
+      ARGUS_KEY: "agent-key"   # same key you use for the UI
+    volumes:
+      - /share/folder:/data/folder:ro   # per-share, reliable with symlinks
+      - argus-agent-spool:/var/lib/argus
+volumes:
+  argus-agent-spool:

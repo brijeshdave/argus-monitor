@@ -1,0 +1,52 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Argus — Monitoring Platform
+# Author: Brijesh Dave <https://github.com/brijeshdave>
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Local-only working directories (never tracked).
+archive/
+
+# dependencies
+node_modules/
+.pnpm-store/
+
+# builds
+dist/
+build/
+*.tsbuildinfo
+apps/frontend/dist/
+
+# data / runtime (bind-mounted host dirs hold real data — never commit)
+data/
+*.sqlite
+*.sqlite-journal
+*.db
+*.dump
+
+# secrets & local config
+.env
+.env.*
+!.env.example
+
+# agent build artifacts
+agent/dist/
+agent/*.exe
+agent/argus-agent*
+agent/agent
+
+# logs & os cruft
+*.log
+.DS_Store
+Thumbs.db
+
+# editor
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Built NAS agent image tarballs (large binaries)
+agent/docker-images/*.tar
+agent/docker-images/*.tar.gz
+
+# Private, non-public working files (AI tooling, internal spec) — never commit
+.private/

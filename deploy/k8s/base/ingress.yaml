@@ -1,0 +1,28 @@
+# Argus — Monitoring Platform · Author: Brijesh Dave <https://github.com/brijeshdave>
+# Routes the SPA and proxies API + WebSocket to the backend. TLS via cert-manager
+# (annotation) or your own secret. Argus is proxy-aware (TRUST_PROXY in ConfigMap).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argus
+  namespace: argus
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600" # long-lived WS
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: argus.example.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend: { service: { name: argus-backend, port: { number: 8080 } } }
+          - path: /ws
+            pathType: Prefix
+            backend: { service: { name: argus-backend, port: { number: 8080 } } }
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: argus-frontend, port: { number: 80 } } }
+  # tls:
+  #   - hosts: [argus.example.com]
+  #     secretName: argus-tls

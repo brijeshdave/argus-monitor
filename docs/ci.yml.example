@@ -1,0 +1,40 @@
+# Argus — Monitoring Platform · Author: Brijesh Dave <https://github.com/brijeshdave>
+name: CI
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+
+jobs:
+  node:
+    name: Typecheck · Test · Build (Node)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r build
+      - run: pnpm -r typecheck
+      - run: pnpm -r test
+
+  agent:
+    name: Build · Vet · Test (Go agent)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: "1.25", cache-dependency-path: agent/go.sum }
+      - working-directory: agent
+        run: |
+          go build ./...
+          go vet ./...
+          go test ./...
+      - name: Cross-compile (win/linux/darwin)
+        working-directory: agent
+        run: |
+          GOOS=windows GOARCH=amd64 go build ./cmd/agent
+          GOOS=darwin  GOARCH=arm64 go build ./cmd/agent
+          GOOS=linux   GOARCH=arm64 go build ./cmd/agent
