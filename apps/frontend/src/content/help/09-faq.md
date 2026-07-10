@@ -72,6 +72,14 @@ whole host DOWN. Mark it non-critical if its failure should only degrade the hos
 Add a **synthetic monitor** (HTTP/TCP/DNS/ping). These run server-side from the
 Argus host, so you don't need an agent on the target.
 
+## I forgot the admin password — how do I get back in?
+
+From the host shell run `./argus reset-password` (no arguments resets the owner and
+prints a new password). It works offline, bypassing the API, so it recovers the account
+even when it's the only user. It also clears any login lockout and invalidates existing
+sessions. Add `--reset-2fa` if you also lost your two-factor device. Sign in, then
+change the password under **Profile**.
+
 ## Will changing my password log me out?
 
 It keeps your **current** session signed in but ends all your **other** sessions, so

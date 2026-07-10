@@ -148,7 +148,7 @@ cmd_dev_db() {
 }
 
 cmd_gen_key()   { node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"; }
-cmd_reset_password() { $DC run --rm backend node dist/scripts/reset-password.js "$@"; }
+cmd_reset_password() { ensure_env; $DC run --rm -w /repo/apps/backend backend node dist/scripts/reset-password.js "$@"; }
 
 cmd_doctor() {
   log "Toolchain:"
