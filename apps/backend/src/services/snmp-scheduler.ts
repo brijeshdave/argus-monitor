@@ -14,6 +14,7 @@ import { listEnabledSnmpMonitors } from "@/services/monitors.js";
 import { getMonitorCred } from "@/services/monitor-cred.js";
 import { getSnmpProfile } from "@/services/snmp-profiles.js";
 import { processUnits } from "@/services/pipeline.js";
+import type { SnmpSample } from "@argus/shared";
 import { snmpCollect, type ProfileOid, type SnmpProfileLite } from "@/services/snmp.js";
 
 const INTERVAL_MS = Number(process.env.SNMP_INTERVAL_MS ?? 60_000);
@@ -26,8 +27,34 @@ const INTERVAL_MS = Number(process.env.SNMP_INTERVAL_MS ?? 60_000);
  */
 const FAIL_THRESHOLD = Math.max(1, Number(process.env.SNMP_FAIL_THRESHOLD ?? 3));
 
+/**
+ * Two-speed polling. Reachability + CPU/memory + scalar OIDs are a couple of round
+ * trips, so they run every INTERVAL_MS. The vendor disk table + profile tables are
+ * many sequential walks (slow devices compute counters on demand) — running those
+ * every cycle starves the device and makes it miss the next poll. They therefore run
+ * only every TABLES_INTERVAL_MS; in between, the last table/disk readings are carried
+ * forward so the UI keeps showing them.
+ */
+const TABLES_INTERVAL_MS = Math.max(
+  INTERVAL_MS,
+  Number(process.env.SNMP_TABLES_INTERVAL_MS ?? 300_000),
+);
+
+/**
+ * A heavy walk leaves slow devices busy for a while, so the very next poll would be
+ * missed. Skip polling until the device has had this long to recover (default: one
+ * interval). The heavy walk itself already recorded CPU/memory, so nothing is lost.
+ */
+const HEAVY_COOLDOWN_MS = Math.max(0, Number(process.env.SNMP_HEAVY_COOLDOWN_MS ?? INTERVAL_MS));
+
 /** Consecutive failed polls per monitor id (in-memory; reset on success). */
 const failures = new Map<string, number>();
+/** When each monitor last completed a heavy (table) walk. */
+const lastHeavyAt = new Map<string, number>();
+/** Do not poll a monitor before this instant (post-heavy-walk recovery). */
+const cooldownUntil = new Map<string, number>();
+/** Last successful heavy readings, carried forward between heavy walks. */
+const heavyCache = new Map<string, { tables?: SnmpSample["tables"]; disks?: SnmpSample["disks"] }>();
 
 /** Parse a legacy inline OID list ([{label, oid}]) → ProfileOid[] (pre-profile monitors). */
 function parseOids(raw: unknown): ProfileOid[] {
@@ -58,7 +85,14 @@ async function probe(
     ? { standard: dto.standard, oids: dto.oids, tables: dto.tables, vendor: dto.vendor }
     : { standard: true, oids: parseOids(monitor.config.oids) };
 
-  const snmp = await snmpCollect(host, { community, version, profile });
+  // Heavy (table) walks only when due — otherwise a light reachability/metrics poll.
+  const heavy = Date.now() - (lastHeavyAt.get(monitor.id) ?? 0) >= TABLES_INTERVAL_MS;
+
+  // Let a slow device recover after a heavy walk rather than polling it while busy
+  // (that poll would just time out). Never skip a due heavy walk.
+  if (!heavy && Date.now() < (cooldownUntil.get(monitor.id) ?? 0)) return;
+
+  const snmp = await snmpCollect(host, { community, version, profile, includeTables: heavy });
 
   // Flap guard: tolerate transient misses; only a run of consecutive failures is DOWN.
   if (snmp.reachable) {
@@ -78,7 +112,21 @@ async function probe(
 
   const status = snmp.reachable ? "UP" : "DOWN";
 
-  await processUnits(app.telemetry, monitor.agentId, [{ entity: monitor.name, status, meta: { snmp } }]);
+  // Remember fresh heavy readings; carry the last ones forward on light polls so the
+  // UI keeps rendering disks/tables. Metrics below use the FRESH sample only, so stale
+  // table values are never re-recorded as new history points.
+  if (snmp.reachable && heavy) {
+    lastHeavyAt.set(monitor.id, Date.now());
+    heavyCache.set(monitor.id, { tables: snmp.tables, disks: snmp.disks });
+    cooldownUntil.set(monitor.id, Date.now() + HEAVY_COOLDOWN_MS); // let the device recover
+  }
+  const cached = heavyCache.get(monitor.id);
+  const display =
+    snmp.reachable && !heavy && cached
+      ? { ...snmp, ...(cached.tables ? { tables: cached.tables } : {}), ...(cached.disks ? { disks: cached.disks } : {}) }
+      : snmp;
+
+  await processUnits(app.telemetry, monitor.agentId, [{ entity: monitor.name, status, meta: { snmp: display } }]);
 
   // Persist numeric readings (cpu/mem + numeric custom OIDs) for history charts.
   if (snmp.reachable) {
@@ -105,7 +153,7 @@ async function probe(
   app.operatorHub.broadcast({
     t: "patch",
     agentId: monitor.agentId,
-    units: [{ sourceId: monitor.agentId, entity: monitor.name, status, pid: null, meta: { snmp } }],
+    units: [{ sourceId: monitor.agentId, entity: monitor.name, status, pid: null, meta: { snmp: display } }],
     ts: new Date().toISOString(),
   });
 }
@@ -115,6 +163,9 @@ async function sweep(app: FastifyInstance): Promise<void> {
   // Drop failure counters for monitors that were deleted/disabled since the last sweep.
   const live = new Set(monitors.map((m) => m.id));
   for (const id of failures.keys()) if (!live.has(id)) failures.delete(id);
+  for (const id of lastHeavyAt.keys()) if (!live.has(id)) lastHeavyAt.delete(id);
+  for (const id of heavyCache.keys()) if (!live.has(id)) heavyCache.delete(id);
+  for (const id of cooldownUntil.keys()) if (!live.has(id)) cooldownUntil.delete(id);
   if (monitors.length === 0) return;
   await Promise.all(monitors.map((m) => probe(app, { id: m.id, agentId: m.agentId, name: m.name, config: (m.config ?? {}) as Record<string, unknown> })));
 }

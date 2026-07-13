@@ -108,7 +108,19 @@ function walk(session: Session, base: string): Promise<Map<number, unknown>> {
 
 export function snmpCollect(
   host: string,
-  opts: { community?: string; version?: string; profile: SnmpProfileLite; timeoutMs?: number },
+  opts: {
+    community?: string;
+    version?: string;
+    profile: SnmpProfileLite;
+    timeoutMs?: number;
+    /**
+     * Walk the EXPENSIVE parts (vendor disk table + profile tables). Default true.
+     * Set false for a light poll: reachability + standard/scalar OIDs only — a couple
+     * of round trips instead of a full multi-walk, so slow devices (QNAP) aren't
+     * starved by a fast cadence. The scheduler runs the heavy walk less often.
+     */
+    includeTables?: boolean;
+  },
 ): Promise<SnmpSample> {
   return new Promise((resolve) => {
     if (!HOST_RE.test(host)) return resolve({ reachable: false, error: "invalid host" });
@@ -160,19 +172,24 @@ export function snmpCollect(
           if (items.length) sample.items = items;
         }
 
-        // Classic QNAP HdTable (24681) only when the profile has no disk table of its
-        // own — QuTS hero uses the 55062 tables, so this avoids wasted walks/load.
-        if ((opts.profile.vendor ?? "").toUpperCase() === "QNAP" && !(opts.profile.tables?.length)) {
-          const disks = await collectQnapDisks(session);
-          if (disks.length) sample.disks = disks;
-        }
+        // ── Expensive phase: many sequential walks. Skipped on a light poll so a
+        // slow device is not hammered every cycle (the scheduler runs this on its
+        // own, slower cadence and carries the last result forward for display).
+        if (opts.includeTables !== false) {
+          // Classic QNAP HdTable (24681) only when the profile has no disk table of its
+          // own — QuTS hero uses the 55062 tables, so this avoids wasted walks/load.
+          if ((opts.profile.vendor ?? "").toUpperCase() === "QNAP" && !(opts.profile.tables?.length)) {
+            const disks = await collectQnapDisks(session);
+            if (disks.length) sample.disks = disks;
+          }
 
-        const tables: SnmpTable[] = [];
-        for (const t of opts.profile.tables ?? []) {
-          const tbl = await collectTable(session, t);
-          if (tbl.rows.length) tables.push(tbl);
+          const tables: SnmpTable[] = [];
+          for (const t of opts.profile.tables ?? []) {
+            const tbl = await collectTable(session, t);
+            if (tbl.rows.length) tables.push(tbl);
+          }
+          if (tables.length) sample.tables = tables;
         }
-        if (tables.length) sample.tables = tables;
 
         finish(sample);
       } catch (err) {
