@@ -18,6 +18,17 @@ import { snmpCollect, type ProfileOid, type SnmpProfileLite } from "@/services/s
 
 const INTERVAL_MS = Number(process.env.SNMP_INTERVAL_MS ?? 60_000);
 
+/**
+ * SNMP rides UDP and real devices (QNAP NASes especially, which compute counters on
+ * demand) routinely miss a poll while they are busy — often the very next poll after a
+ * heavy table walk. A single miss must NOT flap the monitor, so a device is only
+ * declared DOWN after this many CONSECUTIVE failed polls; any success resets it.
+ */
+const FAIL_THRESHOLD = Math.max(1, Number(process.env.SNMP_FAIL_THRESHOLD ?? 3));
+
+/** Consecutive failed polls per monitor id (in-memory; reset on success). */
+const failures = new Map<string, number>();
+
 /** Parse a legacy inline OID list ([{label, oid}]) → ProfileOid[] (pre-profile monitors). */
 function parseOids(raw: unknown): ProfileOid[] {
   if (!Array.isArray(raw)) return [];
@@ -48,6 +59,23 @@ async function probe(
     : { standard: true, oids: parseOids(monitor.config.oids) };
 
   const snmp = await snmpCollect(host, { community, version, profile });
+
+  // Flap guard: tolerate transient misses; only a run of consecutive failures is DOWN.
+  if (snmp.reachable) {
+    failures.delete(monitor.id);
+  } else {
+    const misses = (failures.get(monitor.id) ?? 0) + 1;
+    failures.set(monitor.id, misses);
+    if (misses < FAIL_THRESHOLD) {
+      app.log.warn(
+        { monitor: monitor.name, misses, threshold: FAIL_THRESHOLD, error: snmp.error },
+        "snmp poll missed — tolerating, status unchanged",
+      );
+      return; // keep the previous status rather than flapping to DOWN
+    }
+    app.log.error({ monitor: monitor.name, misses, error: snmp.error }, "snmp poll failed — marking DOWN");
+  }
+
   const status = snmp.reachable ? "UP" : "DOWN";
 
   await processUnits(app.telemetry, monitor.agentId, [{ entity: monitor.name, status, meta: { snmp } }]);
@@ -84,6 +112,9 @@ async function probe(
 
 async function sweep(app: FastifyInstance): Promise<void> {
   const monitors = await listEnabledSnmpMonitors(app.master);
+  // Drop failure counters for monitors that were deleted/disabled since the last sweep.
+  const live = new Set(monitors.map((m) => m.id));
+  for (const id of failures.keys()) if (!live.has(id)) failures.delete(id);
   if (monitors.length === 0) return;
   await Promise.all(monitors.map((m) => probe(app, { id: m.id, agentId: m.agentId, name: m.name, config: (m.config ?? {}) as Record<string, unknown> })));
 }
