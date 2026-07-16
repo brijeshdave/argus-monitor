@@ -36,7 +36,7 @@ export async function telemetryRoutes(app: FastifyInstance): Promise<void> {
     return listEvents(app.master, app.telemetry, q);
   });
 
-  app.get("/api/notifications", { preHandler: [app.authenticate, app.requirePermission("notifications:read")] }, async (req) => {
+  app.get("/api/notifications", { preHandler: [app.authenticate, app.requirePermission("notifications:read", { allowDevice: true })] }, async (req) => {
     const q = pageQ.extend({ severity: z.string().optional(), acknowledged: z.coerce.boolean().optional(), sourceId: z.string().optional() }).parse(req.query);
     return listNotifications(app.master, app.telemetry, q);
   });

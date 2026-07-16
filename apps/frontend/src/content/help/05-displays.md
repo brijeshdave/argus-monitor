@@ -21,6 +21,14 @@ them in a chrome-less kiosk that auto-refreshes.
 Boards can rotate through multiple layouts, and **device groups** let you target
 content (and ticker messages) to specific walls.
 
+> **A paired display can only show its wallboard.** It is an unattended screen, not
+> an operator account: it cannot reach the dashboard, agents, admin or any other
+> page, and the server rejects those requests even if the URL is typed in directly.
+> To administer Argus from that browser, sign in normally as a user.
+
+If a screen lands on the sign-in page, use **"Open wallboard display"** on that page
+to go to the board / pairing code — no operator login required.
+
 ## The ticker (announcements)
 
 The ticker is the scrolling bar of important notices. Create messages with a

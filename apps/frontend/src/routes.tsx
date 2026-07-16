@@ -47,12 +47,23 @@ const WallboardDisplayPage = lazy(() => import("@/pages/WallboardDisplayPage").t
 const WallboardKiosk = lazy(() => import("@/pages/WallboardKiosk").then((m) => ({ default: m.WallboardKiosk })));
 const DeviceDisplay = lazy(() => import("@/pages/DeviceDisplay").then((m) => ({ default: m.DeviceDisplay })));
 
-/** Gate for authenticated areas: wait while loading, bounce anon to /login. */
+/**
+ * Gate for authenticated OPERATOR areas: wait while loading, bounce anon to /login.
+ * A paired display device is not an operator — it may only render its wallboard, so
+ * it is redirected to /wall no matter which app URL it lands on. (The backend denies
+ * device tokens on operator routes too; this just keeps the UI honest.)
+ */
 function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { status } = useAuth();
+  const { status, isDevice } = useAuth();
   if (status === "loading") return <Spinner label="Loading…" />;
   if (status === "anon") return <Navigate to="/login" replace />;
+  if (isDevice || isPairedDevice()) return <Navigate to="/wall" replace />;
   return <>{children}</>;
+}
+
+/** A browser paired as a display stores a device token locally. */
+function isPairedDevice(): boolean {
+  return Boolean(localStorage.getItem("argus.device.token"));
 }
 
 /**
@@ -64,12 +75,16 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
  *    logged in gets the device display inline to pair (6-digit code). No redirect.
  */
 function WallEntry() {
-  const { status } = useAuth();
-  const pairedDevice = Boolean(localStorage.getItem("argus.device.token"));
-  if (pairedDevice) return <DeviceDisplay />;
+  const { status, isDevice } = useAuth();
+  if (isPairedDevice() || isDevice) return <DeviceDisplay />;
   if (status === "loading") return <Spinner label="Loading…" />;
   if (status === "anon") return <DeviceDisplay />;
   return <WallboardKiosk />;
+}
+
+/** Unknown URL: devices go back to their board, everyone else to the dashboard. */
+function CatchAll() {
+  return <Navigate to={isPairedDevice() ? "/wall" : "/"} replace />;
 }
 
 export function AppRoutes() {
@@ -130,7 +145,7 @@ export function AppRoutes() {
       <Route path="/status" element={<PublicStatusPage />} />
       {/* Fully public help centre — no auth, no app shell */}
       <Route path="/docs" element={<DocsPage />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<CatchAll />} />
     </Routes>
     </Suspense>
   );

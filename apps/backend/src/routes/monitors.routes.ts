@@ -70,7 +70,7 @@ function historySince(q: HistoryQuery): string {
 
 export async function monitorRoutes(app: FastifyInstance): Promise<void> {
   // ── List monitors (optionally scoped to an agent) ──────────────────────────
-  app.get("/api/monitors", { preHandler: [app.authenticate, app.requirePermission("monitors:read")] }, async (req) => {
+  app.get("/api/monitors", { preHandler: [app.authenticate, app.requirePermission("monitors:read", { allowDevice: true })] }, async (req) => {
     const { agentId } = agentIdQuery.parse(req.query);
     return { rows: await listMonitors(app.master, agentId) };
   });

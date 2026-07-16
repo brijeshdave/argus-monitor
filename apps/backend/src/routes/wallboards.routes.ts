@@ -16,11 +16,11 @@ import {
 const layoutSchema = z.record(z.string(), z.unknown());
 
 export async function wallboardRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/api/wallboards", { preHandler: [app.authenticate, app.requirePermission("wallboards:read")] }, async () => ({
+  app.get("/api/wallboards", { preHandler: [app.authenticate, app.requirePermission("wallboards:read", { allowDevice: true })] }, async () => ({
     rows: await listLayouts(app.master),
   }));
 
-  app.get("/api/wallboards/:id", { preHandler: [app.authenticate, app.requirePermission("wallboards:read")] }, async (req, reply) => {
+  app.get("/api/wallboards/:id", { preHandler: [app.authenticate, app.requirePermission("wallboards:read", { allowDevice: true })] }, async (req, reply) => {
     const layout = await getLayout(app.master, (req.params as { id: string }).id);
     return layout ? { layout } : reply.code(404).send({ error: "not_found" });
   });

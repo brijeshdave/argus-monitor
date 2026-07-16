@@ -34,6 +34,8 @@ interface MeResponse {
   attributes: Record<string, unknown>;
   isOwner: boolean;
   mustSetup2fa?: boolean;
+  /** True when authenticated with a display-device token (wallboard-only). */
+  isDevice?: boolean;
 }
 
 /** Shape returned by POST /api/auth/login. */
@@ -47,6 +49,8 @@ interface AuthContextValue {
   user: AuthUser | null;
   permissions: string[];
   isOwner: boolean;
+  /** True for a paired display device: it may ONLY render its wallboard. */
+  isDevice: boolean;
   /** True when policy requires 2FA but the user has not enrolled yet. */
   mustSetup2fa: boolean;
   status: AuthStatus;
@@ -63,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactNode {
   const [user, setUser] = useState<AuthUser | null>(hasToken ? getCachedUser() : null);
   const [permissions, setPermissions] = useState<string[]>([]);
   const [isOwner, setIsOwner] = useState(false);
+  const [isDevice, setIsDevice] = useState(false);
   const [mustSetup2fa, setMustSetup2fa] = useState(false);
   const [status, setStatus] = useState<AuthStatus>(hasToken ? "loading" : "anon");
 
@@ -79,6 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactNode {
     setUser(me.user);
     setPermissions(me.permissions);
     setIsOwner(me.isOwner);
+    setIsDevice(me.isDevice === true);
     setMustSetup2fa(Boolean(me.mustSetup2fa));
     setCachedUser(me.user);
     setStatus("authed");
@@ -87,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactNode {
   const becomeAnon = useCallback(() => {
     setUser(null);
     setPermissions([]);
+    setIsDevice(false);
     setIsOwner(false);
     setMustSetup2fa(false);
     setStatus("anon");
@@ -163,8 +170,8 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactNode {
   );
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, permissions, isOwner, mustSetup2fa, status, login, logout, has }),
-    [user, permissions, isOwner, mustSetup2fa, status, login, logout, has],
+    () => ({ user, permissions, isOwner, isDevice, mustSetup2fa, status, login, logout, has }),
+    [user, permissions, isOwner, isDevice, mustSetup2fa, status, login, logout, has],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

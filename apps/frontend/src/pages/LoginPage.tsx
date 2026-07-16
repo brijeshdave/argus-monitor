@@ -6,6 +6,7 @@
  */
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import { Tv } from "lucide-react";
 import type { PublicOidcProvider } from "@argus/shared";
 import { BRAND } from "@/lib/brand";
 import { useAuth } from "@/auth/AuthContext";
@@ -191,8 +192,18 @@ export function LoginPage() {
           </div>
         ) : null}
 
+        {/* Wallboard entry — an unattended screen lands on /login by default, so give
+            it a way to reach the board / pairing code without an operator sign-in.
+            Same tab: a TV should stay on the wall once it gets there. */}
+        <a
+          href="/wall"
+          className="mt-6 flex items-center justify-center gap-2 rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-300 transition-colors hover:border-sky-500/50 hover:text-sky-200"
+        >
+          <Tv size={15} /> Open wallboard display
+        </a>
+
         {/* Public links — documentation + status, opened in a new tab. */}
-        <div className="mt-6 flex items-center justify-center gap-4 border-t border-slate-800 pt-4 text-xs text-slate-500">
+        <div className="mt-4 flex items-center justify-center gap-4 border-t border-slate-800 pt-4 text-xs text-slate-500">
           <a href="/docs" target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-slate-300">Documentation</a>
           <span className="h-3 w-px bg-slate-800" />
           <a href="/status" target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-slate-300">Status</a>

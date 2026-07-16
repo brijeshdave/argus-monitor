@@ -126,6 +126,11 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     if (subject.userId === STATIC_ADMIN_ID) {
       return { user: { id: STATIC_ADMIN_ID, username: "admin", isOwner: true }, permissions: [], attributes: [], isOwner: true };
     }
+    // A paired display device is not a user: it renders a wallboard and nothing else.
+    // Flagging it lets the SPA route it straight to the board instead of the app shell.
+    if (req.deviceId) {
+      return { user: null, permissions: subject.permissions, attributes: [], isOwner: false, isDevice: true };
+    }
     const [user] = await app.master.select().from(users).where(eq(users.id, subject.userId)).limit(1);
     const required = await isRequired(app.master);
     return {

@@ -45,7 +45,7 @@ export async function tickerRoutes(app: FastifyInstance): Promise<void> {
     rows: await listTicker(app.master),
   }));
 
-  app.get("/api/ticker/active", { preHandler: [app.authenticate, app.requirePermission("ticker:read")] }, async (req) => {
+  app.get("/api/ticker/active", { preHandler: [app.authenticate, app.requirePermission("ticker:read", { allowDevice: true })] }, async (req) => {
     // Audience targeting: a wall device sees its device-group's messages; a user sees
     // their user-groups' messages; owners + automation see everything.
     const subjectId = req.subject!.userId;

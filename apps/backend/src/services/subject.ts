@@ -22,10 +22,21 @@ export const STATIC_ADMIN_SUBJECT: AuthSubject = {
   attributes: [],
 };
 
-/** Read-only capabilities a paired display device is granted (wallboard rendering). */
+/**
+ * Read-only capabilities a paired display device is granted — ONLY what rendering a
+ * wallboard needs. A display is an unattended screen, not an operator: it must never
+ * reach the dashboard, admin or any other page. `dashboard:read` is included solely
+ * because the operator WebSocket hub requires it to stream live unit state to the
+ * board; route/UI access is denied separately (see requireOperator / isDevice).
+ */
 export const DEVICE_READ_PERMS = [
   "dashboard:read", "wallboards:read", "agents:read", "monitors:read", "notifications:read", "ticker:read",
 ];
+
+/** True when a subject is a paired display device rather than a human operator. */
+export function isDeviceSubject(subject: { userId: string }): boolean {
+  return subject.userId.startsWith("device:");
+}
 
 /** A synthetic read-only subject for an approved display device (token auth). */
 export function deviceSubject(deviceId: string): AuthSubject {

@@ -43,7 +43,7 @@ export async function agentRoutes(app: FastifyInstance): Promise<void> {
     return { points };
   });
 
-  app.get("/api/agents", { preHandler: [app.authenticate, app.requirePermission("agents:read")] }, async () => ({
+  app.get("/api/agents", { preHandler: [app.authenticate, app.requirePermission("agents:read", { allowDevice: true })] }, async () => ({
     rows: await listAgents(app.master, isConnected),
   }));
 
