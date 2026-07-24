@@ -19,7 +19,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@fontsource/inter": "^5.2.8",
     "@fontsource/jetbrains-mono": "^5.2.8",
-    "dompurify": "^3.4.11",
+    "dompurify": "^3.4.12",
     "lucide-react": "^1.18.0",
     "marked": "^18.0.5",
     "react": "^18.3.1",
